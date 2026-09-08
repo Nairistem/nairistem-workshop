@@ -1,16 +1,14 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { WorkshopProvider, useWorkshop } from './context/WorkshopContext';
-import { Navbar, type NavTab } from './components/Navbar';
-import { KanbanBoard } from './components/KanbanBoard';
-import { InspectionForm } from './components/InspectionForm';
-import { CashierCommission } from './components/CashierCommission';
+import { Navbar } from './components/Navbar';
+import { MontirView } from './components/views/MontirView';
+import { KasirView } from './components/views/KasirView';
+import { OwnerView } from './components/views/OwnerView';
 import { PublicTracking } from './components/PublicTracking';
-import type { Order } from './types/workshop';
 
 function MainApp() {
-  const [activeTab, setActiveTab] = useState<NavTab>('kanban');
   const [trackingPlate, setTrackingPlate] = useState<string | null>(null);
-  const { orders } = useWorkshop();
+  const { currentRole, orders } = useWorkshop();
 
   // Handle URL path on initial load & popstate (e.g. /track/B1988NAI or /track/B-1988-NAI)
   useEffect(() => {
@@ -45,14 +43,9 @@ function MainApp() {
   const closeTrackingView = () => {
     setTrackingPlate(null);
     window.history.pushState({}, '', '/');
-    setActiveTab('kanban');
   };
 
-  const handleCheckInSuccess = (_newOrder: Order) => {
-    setActiveTab('kanban');
-  };
-
-  // If tracking view is active (either via direct URL or button), show public tracking without login!
+  // If tracking view is active (either via direct URL or preview button), show public tracking without login!
   if (trackingPlate !== null) {
     return (
       <PublicTracking
@@ -65,27 +58,32 @@ function MainApp() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <Navbar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onOpenLiveTracking={() => openTrackingView(orders[0]?.plateNumber || 'B1234NAI')}
+        onOpenLiveTracking={() => openTrackingView(orders[0]?.plateNumber || 'B1988NAI')}
       />
 
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6">
-        {activeTab === 'kanban' && (
-          <KanbanBoard
-            onOpenCheckIn={() => setActiveTab('checkin')}
-            onOpenTracking={openTrackingView}
-          />
+        {currentRole === 'montir' && (
+          <MontirView onOpenTracking={openTrackingView} />
         )}
 
-        {activeTab === 'checkin' && (
-          <InspectionForm onSuccess={handleCheckInSuccess} />
+        {currentRole === 'kasir' && (
+          <KasirView />
         )}
 
-        {activeTab === 'cashier' && (
-          <CashierCommission />
+        {currentRole === 'owner' && (
+          <OwnerView />
         )}
       </main>
+
+      {/* Footer Branding */}
+      <footer className="border-t border-zinc-800/80 bg-zinc-950 py-4 text-center text-xs text-zinc-400">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>&copy; {new Date().getFullYear()} NAIRISTEM Workshop OS • Auto Detailing & Workshop Management</span>
+          <span className="text-[11px] text-zinc-400">
+            Peran Aktif: <strong className="text-zinc-200 uppercase">{currentRole}</strong>
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }

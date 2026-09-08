@@ -1,5 +1,8 @@
-﻿export type OrderStatus = 'queue' | 'detailing' | 'finishing' | 'ready' | 'completed';
+﻿export type UserRole = 'montir' | 'kasir' | 'owner';
+
+export type OrderStatus = 'queue' | 'detailing' | 'finishing' | 'ready' | 'completed';
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
+export type PaymentMethod = 'cash' | 'transfer' | 'qris' | 'pending';
 export type CarView = 'front' | 'rear' | 'left' | 'right' | 'top';
 export type ScratchSeverity = 'minor' | 'medium' | 'severe';
 
@@ -55,11 +58,22 @@ export interface Order {
   discount: number;
   finalTotal: number;
   paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  amountPaid?: number; // Jumlah yang sudah dibayar (DP/Lunas)
+  remainingBalance?: number; // Sisa tagihan piutang
   notes: string;
   estimatedCompletion: string; // ISO string
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }
+
+export type StaffRole = 
+  | 'Lead Specialist Coating' 
+  | 'Paint Correction Master' 
+  | 'Interior & Glass Specialist' 
+  | 'Junior Detailer' 
+  | 'Kasir & Front Desk' 
+  | 'Workshop Manager';
 
 export interface Technician {
   id: string;
@@ -67,6 +81,37 @@ export interface Technician {
   phone: string;
   role: string;
   defaultCommissionPct: number;
+  isActive?: boolean;
+}
+
+export type ExpenseCategory = 
+  | 'obat_poles' 
+  | 'konsumsi_tim' 
+  | 'utilitas' 
+  | 'sewa_tempat' 
+  | 'alat_bengkel' 
+  | 'operasional_lain';
+
+export interface Expense {
+  id: string;
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string; // ISO date string YYYY-MM-DD
+  notes?: string;
+  receiptNumber?: string;
+  createdAt: string;
+}
+
+export interface CashClosing {
+  id: string;
+  date: string;
+  actualCashInDrawer: number;
+  expectedCash: number;
+  difference: number;
+  notes: string;
+  closedBy: string;
+  closedAt: string;
 }
 
 export const STATUS_FLOW: OrderStatus[] = ['queue', 'detailing', 'finishing', 'ready', 'completed'];
@@ -131,4 +176,13 @@ export const STATUS_META: Record<OrderStatus, {
     accentHex: '#71717a',
     description: 'Kendaraan telah diserahkan dan invoice telah lunas.'
   }
+};
+
+export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; badge: string; text: string }> = {
+  obat_poles: { label: 'Obat Poles & Coating', badge: 'bg-blue-950/60 border-blue-800/60', text: 'text-blue-400' },
+  konsumsi_tim: { label: 'Makan & Konsumsi Tim', badge: 'bg-amber-950/60 border-amber-800/60', text: 'text-amber-400' },
+  utilitas: { label: 'Listrik, Air & WiFi', badge: 'bg-cyan-950/60 border-cyan-800/60', text: 'text-cyan-400' },
+  sewa_tempat: { label: 'Sewa Ruko / Workshop', badge: 'bg-purple-950/60 border-purple-800/60', text: 'text-purple-400' },
+  alat_bengkel: { label: 'Pad, Tape & Alat', badge: 'bg-rose-950/60 border-rose-800/60', text: 'text-rose-400' },
+  operasional_lain: { label: 'Operasional Lainnya', badge: 'bg-zinc-800 border-zinc-700', text: 'text-zinc-300' },
 };

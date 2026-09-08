@@ -1,4 +1,4 @@
-import type { Order, ServiceItem, Technician } from '../types/workshop';
+﻿import type { Order, ServiceItem, Technician, Expense } from '../types/workshop';
 
 export const DEFAULT_TECHNICIANS: Technician[] = [
   {
@@ -7,6 +7,7 @@ export const DEFAULT_TECHNICIANS: Technician[] = [
     phone: '08123456781',
     role: 'Lead Specialist Coating',
     defaultCommissionPct: 15,
+    isActive: true,
   },
   {
     id: 'tech-2',
@@ -14,6 +15,7 @@ export const DEFAULT_TECHNICIANS: Technician[] = [
     phone: '08123456782',
     role: 'Paint Correction Master',
     defaultCommissionPct: 15,
+    isActive: true,
   },
   {
     id: 'tech-3',
@@ -21,6 +23,7 @@ export const DEFAULT_TECHNICIANS: Technician[] = [
     phone: '08123456783',
     role: 'Interior & Glass Specialist',
     defaultCommissionPct: 12.5,
+    isActive: true,
   },
   {
     id: 'tech-4',
@@ -28,6 +31,7 @@ export const DEFAULT_TECHNICIANS: Technician[] = [
     phone: '08123456784',
     role: 'Junior Detailer',
     defaultCommissionPct: 10,
+    isActive: true,
   }
 ];
 
@@ -76,6 +80,69 @@ export const SERVICE_CATALOG: ServiceItem[] = [
   }
 ];
 
+export const INITIAL_MOCK_EXPENSES: Expense[] = [
+  {
+    id: 'exp-001',
+    title: 'Pembelian Obat Poles Menzerna HCC 400 & Koch Chemie M3.02',
+    category: 'obat_poles',
+    amount: 850000,
+    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    notes: 'Restock compound heavy cut & micro cut untuk pengerjaan coating minggu ini.',
+    receiptNumber: 'INV-SP-8821',
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'exp-002',
+    title: 'Busa Poles Rupes Yellow Fine 5" & Wool Pad (6 Pcs)',
+    category: 'alat_bengkel',
+    amount: 620000,
+    date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    notes: 'Penggantian busa poles aus untuk bay 1 dan bay 2.',
+    receiptNumber: 'KWT-9923',
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'exp-003',
+    title: 'Makan Siang & Kopi Seluruh Tim Detailing (4 Orang)',
+    category: 'konsumsi_tim',
+    amount: 140000,
+    date: new Date().toISOString().split('T')[0],
+    notes: 'Konsumsi siang pengerjaan lembur Fortuner & Porsche.',
+    receiptNumber: 'NOTA-WARUNG-08',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'exp-004',
+    title: 'Tagihan Listrik PLN Workshop Detailing 3500VA',
+    category: 'utilitas',
+    amount: 1450000,
+    date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    notes: 'Bulan September 2026 (pemakaian mesin polisher & lampu infrared curing).',
+    receiptNumber: 'PLN-20260901',
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'exp-005',
+    title: 'Masking Tape 3M 24mm (10 Roll) & Nitrile Gloves (2 Box)',
+    category: 'alat_bengkel',
+    amount: 185000,
+    date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    notes: 'Perlengkapan masking karet kaca & panel mobil.',
+    receiptNumber: 'INV-TB-441',
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'exp-006',
+    title: 'Air PDAM & Biaya Pengisian Tabung Snow Wash',
+    category: 'utilitas',
+    amount: 320000,
+    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    notes: 'Operasional cuci dekontaminasi berkala.',
+    receiptNumber: 'KWT-AIR-89',
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+  }
+];
+
 export const INITIAL_MOCK_ORDERS: Order[] = [
   {
     id: 'ord-088',
@@ -114,6 +181,9 @@ export const INITIAL_MOCK_ORDERS: Order[] = [
     discount: 0,
     finalTotal: 3800000,
     paymentStatus: 'unpaid',
+    paymentMethod: 'pending',
+    amountPaid: 0,
+    remainingBalance: 3800000,
     notes: 'Unit contoh verifikasi: B 1988 NAI (Budi Pratama) - Coating Platinum 9H',
     estimatedCompletion: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
@@ -162,7 +232,10 @@ export const INITIAL_MOCK_ORDERS: Order[] = [
     technicianCommissionAmount: 667500,
     discount: 150000,
     finalTotal: 4300000,
-    paymentStatus: 'unpaid',
+    paymentStatus: 'partial',
+    paymentMethod: 'transfer',
+    amountPaid: 1500000,
+    remainingBalance: 2800000,
     notes: 'Prioritaskan pembersihan jamur kaca depan karena pemilik sering dinas malam hari.',
     estimatedCompletion: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
@@ -211,6 +284,9 @@ export const INITIAL_MOCK_ORDERS: Order[] = [
     discount: 0,
     finalTotal: 2200000,
     paymentStatus: 'partial',
+    paymentMethod: 'qris',
+    amountPaid: 1000000,
+    remainingBalance: 1200000,
     notes: 'Mobil warna hitam solid, lakukan test spot di kap mesin sebelum poles seluruh bodi.',
     estimatedCompletion: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
@@ -257,6 +333,9 @@ export const INITIAL_MOCK_ORDERS: Order[] = [
     discount: 250000,
     finalTotal: 4500000,
     paymentStatus: 'paid',
+    paymentMethod: 'transfer',
+    amountPaid: 4500000,
+    remainingBalance: 0,
     notes: 'Sedang infrared curing layer ke-3. Jangan sampai debu menempel di sayap belakang (spoiler).',
     estimatedCompletion: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
@@ -301,6 +380,9 @@ export const INITIAL_MOCK_ORDERS: Order[] = [
     discount: 0,
     finalTotal: 1600000,
     paymentStatus: 'paid',
+    paymentMethod: 'cash',
+    amountPaid: 1600000,
+    remainingBalance: 0,
     notes: 'Siap di pick up. Kunci mobil sudah di resepsionis depan.',
     estimatedCompletion: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(),
@@ -337,6 +419,9 @@ export const INITIAL_MOCK_ORDERS: Order[] = [
     discount: 0,
     finalTotal: 3800000,
     paymentStatus: 'paid',
+    paymentMethod: 'transfer',
+    amountPaid: 3800000,
+    remainingBalance: 0,
     notes: 'Pengerjaan tuntas memuaskan. Customer menjadwalkan maintenance 6 bulan ke depan.',
     estimatedCompletion: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
