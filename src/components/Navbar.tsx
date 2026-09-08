@@ -55,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenLiveTracking }) => {
     {
       id: 'kasir',
       label: 'Kasir & Front Desk',
-      sublabel: 'POS Meja Depan',
+      sublabel: 'POS & Kas Keluar',
       icon: CreditCard,
       activeClass: 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/25',
       activeBorder: 'border-emerald-500',

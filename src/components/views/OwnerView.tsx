@@ -30,7 +30,7 @@ export const OwnerView: React.FC = () => {
 
   // --- Expenses Form & Filters ---
   const [expenseTitle, setExpenseTitle] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('obat_poles');
+  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('sewa_tempat');
   const [expenseAmount, setExpenseAmount] = useState<number>(0);
   const [expenseDate, setExpenseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [expenseReceipt, setExpenseReceipt] = useState('');
@@ -57,7 +57,7 @@ export const OwnerView: React.FC = () => {
     'Workshop Manager',
   ];
 
-  // Submit Expense
+  // Submit Expense (Strategic / Owner level)
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseTitle.trim() || expenseAmount <= 0) return;
@@ -68,10 +68,10 @@ export const OwnerView: React.FC = () => {
       amount: Number(expenseAmount),
       date: expenseDate,
       receiptNumber: expenseReceipt.trim() || undefined,
-      notes: expenseNotes.trim() || undefined
+      notes: expenseNotes.trim() ? `[Owner] ${expenseNotes.trim()}` : '[Dicatat oleh Owner]'
     });
 
-    setExpenseSuccessMsg(`Pengeluaran "${expenseTitle}" berhasil dicatat!`);
+    setExpenseSuccessMsg(`Pengeluaran toko "${expenseTitle}" berhasil dicatat!`);
     setTimeout(() => setExpenseSuccessMsg(''), 3500);
 
     // Reset Form
@@ -201,7 +201,7 @@ export const OwnerView: React.FC = () => {
                 OWNER VIEW
               </span>
             </div>
-            <p className="text-xs text-zinc-400">Kontrol laba bersih riil, buku kas keluar, master data staff, dan performa omzet bengkel.</p>
+            <p className="text-xs text-zinc-400">Kontrol laba bersih riil, audit laporan kas keluar toko, master data staff, dan performa detailer.</p>
           </div>
         </div>
 
@@ -223,7 +223,7 @@ export const OwnerView: React.FC = () => {
             }`}
           >
             <Wallet className="w-4 h-4" />
-            <span>Kas Keluar Toko ({expenses.length})</span>
+            <span>Audit Kas Keluar ({expenses.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('staff')}
@@ -257,7 +257,7 @@ export const OwnerView: React.FC = () => {
                   Formula Perhitungan Laba Bersih Hak Pemilik:
                 </span>
                 <p className="text-xs sm:text-sm text-zinc-300">
-                  <span className="text-zinc-100 font-bold">Laba Bersih Riil</span> = Total Omzet SPK (<span className="text-blue-400 font-mono">Rp {financials.totalGrossRevenue.toLocaleString('id-ID')}</span>) − Komisi Montir (<span className="text-cyan-400 font-mono">Rp {financials.totalCommissionPayable.toLocaleString('id-ID')}</span>) − Beban Kas Toko (<span className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</span>)
+                  <span className="text-zinc-100 font-bold">Laba Bersih Riil</span> = Total Omzet SPK (<span className="text-blue-400 font-mono">Rp {financials.totalGrossRevenue.toLocaleString('id-ID')}</span>) − Komisi Montir (<span className="text-cyan-400 font-mono">Rp {financials.totalCommissionPayable.toLocaleString('id-ID')}</span>) − Kas Keluar Toko (<span className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</span>)
                 </p>
               </div>
 
@@ -298,7 +298,7 @@ export const OwnerView: React.FC = () => {
               <span className="text-lg sm:text-2xl font-bold font-mono text-rose-400">
                 Rp {financials.totalExpenses.toLocaleString('id-ID')}
               </span>
-              <span className="text-[10px] text-zinc-400 block mt-0.5">{expenses.length} transaksi kas keluar</span>
+              <span className="text-[10px] text-zinc-400 block mt-0.5">Dicatat oleh Kasir & Owner</span>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
@@ -326,7 +326,7 @@ export const OwnerView: React.FC = () => {
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Percent className="w-4 h-4 text-purple-400" /> Distribusi Alokasi Omzet SPK
                 </h3>
-                <p className="text-xs text-zinc-400">Proporsi uang masuk terhadap biaya operasional, gaji/komisi, dan laba bersih.</p>
+                <p className="text-xs text-zinc-400">Proporsi uang masuk terhadap biaya operasional toko, gaji/komisi, dan laba bersih.</p>
               </div>
 
               {/* Stacked Progress Bar */}
@@ -344,7 +344,7 @@ export const OwnerView: React.FC = () => {
                 <div 
                   style={{ width: `${Math.max(5, expensePctOfGross)}%` }} 
                   className="bg-rose-500 h-full transition-all" 
-                  title={`Pengeluaran Toko: ${expensePctOfGross}%`}
+                  title={`Kas Keluar Toko: ${expensePctOfGross}%`}
                 />
               </div>
 
@@ -438,9 +438,26 @@ export const OwnerView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: BUKU PENGELUARAN OPERASIONAL (KAS KELUAR) */}
+      {/* TAB 2: AUDIT & REKAP LAPORAN KAS KELUAR TOKO */}
       {activeTab === 'expenses' && (
         <div className="space-y-6">
+          {/* Audit Information Banner */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-rose-400" /> Audit Laporan Pengeluaran Toko • Owner Oversight
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Rekapitulasi pengeluaran kas toko yang dicatat kasir (makan teknisi, belanja mendesak) serta pengeluaran sewa & operasional owner.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+                Total Beban Toko: Rp {financials.totalExpenses.toLocaleString('id-ID')}
+              </span>
+            </div>
+          </div>
+
           {/* Category Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {categoryTotals.map(cat => (
@@ -464,13 +481,13 @@ export const OwnerView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            {/* Left Column: Form Tambah Pengeluaran */}
+            {/* Left Column: Form Tambah Pengeluaran Strategis Owner */}
             <form onSubmit={handleAddExpense} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <div className="pb-3 border-b border-zinc-800">
                 <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-rose-400" /> Catat Kas Keluar Baru
+                  <Plus className="w-4 h-4 text-rose-400" /> Catat Pengeluaran Strategis Toko
                 </h3>
-                <p className="text-xs text-zinc-400">Pengeluaran langsung memotong Laba Bersih bengkel.</p>
+                <p className="text-xs text-zinc-400">Biaya sewa workshop, pembelian mesin besar, renovasi, atau biaya owner.</p>
               </div>
 
               {expenseSuccessMsg && (
@@ -482,14 +499,14 @@ export const OwnerView: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                  Nama / Keperluan Pengeluaran <span className="text-rose-400">*</span>
+                  Keperluan / Pos Pengeluaran <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={expenseTitle}
                   onChange={e => setExpenseTitle(e.target.value)}
-                  placeholder="Misal: Beli Compound Menzerna 1L & Pad"
+                  placeholder="Misal: Sewa Ruko Tahunan / Mesin Poles Rupes"
                   className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-rose-500"
                 />
               </div>
@@ -517,7 +534,7 @@ export const OwnerView: React.FC = () => {
                   <input
                     type="number"
                     min={1000}
-                    step={5000}
+                    step={10000}
                     required
                     value={expenseAmount || ''}
                     onChange={e => setExpenseAmount(Number(e.target.value) || 0)}
@@ -543,13 +560,13 @@ export const OwnerView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-medium text-zinc-300 mb-1.5">
-                    No. Nota / Kwitansi (Opsional)
+                    No. Nota / Kontrak Vendor (Opsional)
                   </label>
                   <input
                     type="text"
                     value={expenseReceipt}
                     onChange={e => setExpenseReceipt(e.target.value)}
-                    placeholder="INV/2026/03/99"
+                    placeholder="KTR/2026/03/01"
                     className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-rose-500"
                   />
                 </div>
@@ -563,7 +580,7 @@ export const OwnerView: React.FC = () => {
                   rows={2}
                   value={expenseNotes}
                   onChange={e => setExpenseNotes(e.target.value)}
-                  placeholder="Keterangan toko pembelian atau tujuan pemakaian..."
+                  placeholder="Keterangan kontrak, termin pembayaran, atau vendor..."
                   className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-rose-500"
                 />
               </div>
@@ -573,18 +590,18 @@ export const OwnerView: React.FC = () => {
                 className="w-full h-11 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-rose-600/20"
               >
                 <Plus className="w-4 h-4" />
-                <span>Simpan Pengeluaran Kas Toko</span>
+                <span>Simpan Pengeluaran Toko</span>
               </button>
             </form>
 
-            {/* Right Column: Riwayat Pengeluaran */}
+            {/* Right Column: Riwayat Audit Pengeluaran */}
             <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
                 <div>
                   <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
-                    <Wallet className="w-4 h-4 text-rose-400" /> Riwayat Kas Keluar Toko
+                    <Wallet className="w-4 h-4 text-rose-400" /> Riwayat Audit Seluruh Kas Keluar
                   </h3>
-                  <p className="text-xs text-zinc-400">Total Pengeluaran: <strong className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</strong></p>
+                  <p className="text-xs text-zinc-400">Total Terdata: <strong className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</strong></p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -614,7 +631,7 @@ export const OwnerView: React.FC = () => {
                   <thead>
                     <tr className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
                       <th className="py-2.5 px-3">Tanggal</th>
-                      <th className="py-2.5 px-3">Keperluan / Judul</th>
+                      <th className="py-2.5 px-3">Keperluan / Keterangan</th>
                       <th className="py-2.5 px-3">Kategori</th>
                       <th className="py-2.5 px-3 text-right">Nominal</th>
                       <th className="py-2.5 px-3 text-center">Aksi</th>
@@ -641,7 +658,7 @@ export const OwnerView: React.FC = () => {
                                 <div className="text-[10px] text-zinc-400 font-mono">Nota: {item.receiptNumber}</div>
                               )}
                               {item.notes && (
-                                <div className="text-[11px] text-zinc-400 italic mt-0.5">"{item.notes}"</div>
+                                <div className="text-[11px] text-zinc-400 italic mt-0.5">{item.notes}</div>
                               )}
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap">

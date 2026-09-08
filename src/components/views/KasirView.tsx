@@ -1,31 +1,56 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useWorkshop } from '../../context/WorkshopContext';
-import type { Order, PaymentMethod } from '../../types/workshop';
+import type { Order, PaymentMethod, ExpenseCategory } from '../../types/workshop';
+import { EXPENSE_CATEGORIES } from '../../types/workshop';
 import { 
   CreditCard, DollarSign, QrCode, Building2, Printer, 
-  Send, CheckCircle2, Search, Clock, Lock, Check
+  Send, CheckCircle2, Search, Clock, Lock, Check,
+  Wallet, Plus, Trash2, Utensils
 } from 'lucide-react';
 import { InvoiceModal } from '../InvoiceModal';
 import { createWhatsAppLink } from '../../lib/whatsapp';
 
 export const KasirView: React.FC = () => {
   const { 
-    orders, processPayment, financials, cashClosings, addCashClosing 
+    orders, 
+    processPayment, 
+    financials, 
+    cashClosings, 
+    addCashClosing,
+    expenses,
+    addExpense,
+    deleteExpense
   } = useWorkshop();
 
-  const [activeTab, setActiveTab] = useState<'pos' | 'piutang' | 'tutup_kasir'>('pos');
+  const [activeTab, setActiveTab] = useState<'pos' | 'kas_keluar' | 'piutang' | 'tutup_kasir'>('pos');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
 
+  // POS Payment Modal State
   const [payingOrder, setPayingOrder] = useState<Order | null>(null);
   const [payAmount, setPayAmount] = useState<number>(0);
   const [payMethod, setPayMethod] = useState<PaymentMethod>('cash');
   const [payNotes, setPayNotes] = useState('');
 
+  // Kas Keluar (Petty Cash) Form State
+  const [expenseTitle, setExpenseTitle] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('konsumsi_tim');
+  const [expenseAmount, setExpenseAmount] = useState<number>(0);
+  const [expenseDate, setExpenseDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [expenseReceipt, setExpenseReceipt] = useState('');
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [expenseSuccessMsg, setExpenseSuccessMsg] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [expenseSearch, setExpenseSearch] = useState('');
+
+  // Tutup Kasir State
   const [actualDrawerCash, setActualDrawerCash] = useState<number>(0);
   const [cashierName, setCashierName] = useState('Kasir Meja Depan');
   const [closingNotes, setClosingNotes] = useState('');
   const [closingSuccessMsg, setClosingSuccessMsg] = useState('');
+
+  // Expected cash in drawer = Cash SPK diterima - Kas Keluar dari laci
+  const expectedCashInDrawer = Math.max(0, financials.cashPaymentsTotal - financials.totalExpenses);
 
   const openPayModal = (order: Order) => {
     setPayingOrder(order);
@@ -53,9 +78,40 @@ export const KasirView: React.FC = () => {
     window.open(link, '_blank');
   };
 
+  // Submit Kas Keluar (Petty Cash by Kasir)
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expenseTitle.trim() || expenseAmount <= 0) return;
+
+    await addExpense({
+      title: expenseTitle.trim(),
+      category: expenseCategory,
+      amount: Number(expenseAmount),
+      date: expenseDate,
+      receiptNumber: expenseReceipt.trim() || undefined,
+      notes: expenseNotes.trim() ? `[Kasir] ${expenseNotes.trim()}` : '[Dicatat oleh Kasir]'
+    });
+
+    setExpenseSuccessMsg(`Kas keluar "${expenseTitle}" Rp ${Number(expenseAmount).toLocaleString('id-ID')} berhasil dicatat!`);
+    setTimeout(() => setExpenseSuccessMsg(''), 3500);
+
+    // Reset Form
+    setExpenseTitle('');
+    setExpenseAmount(0);
+    setExpenseReceipt('');
+    setExpenseNotes('');
+  };
+
+  // Preset shortcut helper for cashier
+  const applyPreset = (title: string, category: ExpenseCategory, amount: number) => {
+    setExpenseTitle(title);
+    setExpenseCategory(category);
+    setExpenseAmount(amount);
+  };
+
   const handleSaveClosing = async (e: React.FormEvent) => {
     e.preventDefault();
-    const expected = financials.cashPaymentsTotal;
+    const expected = expectedCashInDrawer;
     const diff = actualDrawerCash - expected;
 
     await addCashClosing({
@@ -63,11 +119,11 @@ export const KasirView: React.FC = () => {
       actualCashInDrawer: actualDrawerCash,
       expectedCash: expected,
       difference: diff,
-      notes: closingNotes,
+      notes: closingNotes ? `${closingNotes} (Kas Keluar Toko: Rp ${financials.totalExpenses.toLocaleString('id-ID')})` : `Kas Keluar Toko: Rp ${financials.totalExpenses.toLocaleString('id-ID')}`,
       closedBy: cashierName
     });
 
-    setClosingSuccessMsg(`Tutup kasir berhasil disimpan! Selisih: Rp ${diff.toLocaleString('id-ID')}`);
+    setClosingSuccessMsg(`Tutup kasir berhasil disimpan! Selisih laci: Rp ${diff.toLocaleString('id-ID')}`);
     setTimeout(() => setClosingSuccessMsg(''), 4000);
     setClosingNotes('');
   };
@@ -82,8 +138,32 @@ export const KasirView: React.FC = () => {
   });
 
   const unpaidOrders = filteredOrders.filter(o => o.paymentStatus !== 'paid');
+
+  // Filtered expenses
+  const filteredExpenses = expenses.filter(e => {
+    const matchesCategory = filterCategory === 'all' || e.category === filterCategory;
+    const q = expenseSearch.toLowerCase();
+    const matchesSearch = e.title.toLowerCase().includes(q) || (e.notes && e.notes.toLowerCase().includes(q));
+    return matchesCategory && matchesSearch;
+  });
+
+  // Calculate category totals for kasir
+  const categoryTotals = Object.keys(EXPENSE_CATEGORIES).map(catKey => {
+    const total = expenses
+      .filter(e => e.category === catKey)
+      .reduce((sum, e) => sum + e.amount, 0);
+    const count = expenses.filter(e => e.category === catKey).length;
+    return {
+      key: catKey as ExpenseCategory,
+      ...EXPENSE_CATEGORIES[catKey as ExpenseCategory],
+      total,
+      count
+    };
+  });
+
   return (
     <div className="space-y-6">
+      {/* Top Header & Navigation */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
@@ -96,10 +176,13 @@ export const KasirView: React.FC = () => {
                 KASIR VIEW
               </span>
             </div>
-            <p className="text-xs text-zinc-400">Penerimaan pembayaran, cetak invoice, follow-up piutang, dan tutup kasir laci harian.</p>
+            <p className="text-xs text-zinc-400">
+              Penerimaan pembayaran SPK, pencatatan kas keluar harian (makan teknisi/belanja mendesak), piutang, dan tutup kasir.
+            </p>
           </div>
         </div>
 
+        {/* 4 Tabs Navigation */}
         <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs w-full sm:w-auto overflow-x-auto">
           <button
             onClick={() => setActiveTab('pos')}
@@ -108,7 +191,16 @@ export const KasirView: React.FC = () => {
             }`}
           >
             <CreditCard className="w-4 h-4" />
-            <span>Transaksi Kasir ({orders.length})</span>
+            <span>Transaksi POS ({orders.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('kas_keluar')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'kas_keluar' ? 'bg-rose-600 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Wallet className="w-4 h-4" />
+            <span>Kas Keluar Toko ({expenses.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('piutang')}
@@ -117,7 +209,7 @@ export const KasirView: React.FC = () => {
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Manajemen Piutang ({unpaidOrders.length})</span>
+            <span>Piutang ({unpaidOrders.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('tutup_kasir')}
@@ -126,45 +218,47 @@ export const KasirView: React.FC = () => {
             }`}
           >
             <Lock className="w-4 h-4" />
-            <span>Tutup Kasir Harian</span>
+            <span>Tutup Kasir</span>
           </button>
         </div>
       </div>
 
+      {/* 4 Financial Indicator Badges for Cashier */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Uang Kasir Terkumpul</span>
+          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Total Uang Kasir Masuk</span>
           <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">
             Rp {financials.totalPaidRevenue.toLocaleString('id-ID')}
           </span>
-          <span className="text-[10px] text-zinc-400 block mt-0.5">Sudah masuk kasir</span>
+          <span className="text-[10px] text-zinc-400 block mt-0.5">Semua metode pembayaran</span>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
+          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Total Kas Keluar (Biaya)</span>
+          <span className="text-xl sm:text-2xl font-bold font-mono text-rose-400">
+            Rp {financials.totalExpenses.toLocaleString('id-ID')}
+          </span>
+          <span className="text-[10px] text-zinc-400 block mt-0.5">{expenses.length} pengeluaran kasir</span>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
+          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Estimasi Kas Tunai Laci</span>
+          <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
+            Rp {expectedCashInDrawer.toLocaleString('id-ID')}
+          </span>
+          <span className="text-[10px] text-zinc-400 block mt-0.5">Uang tunai bersih di laci</span>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Total Piutang Gantung</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-rose-400">
+          <span className="text-xl sm:text-2xl font-bold font-mono text-cyan-400">
             Rp {financials.totalUnpaidReceivables.toLocaleString('id-ID')}
           </span>
-          <span className="text-[10px] text-rose-400/80 block mt-0.5">{unpaidOrders.length} unit belum lunas</span>
-        </div>
-
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Uang Tunai (Cash) Laci</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
-            Rp {financials.cashPaymentsTotal.toLocaleString('id-ID')}
-          </span>
-          <span className="text-[10px] text-zinc-400 block mt-0.5">Wajib cocok saat tutup kasir</span>
-        </div>
-
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Non-Tunai (Transfer/QRIS)</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-cyan-400">
-            Rp {(financials.transferPaymentsTotal + financials.qrisPaymentsTotal).toLocaleString('id-ID')}
-          </span>
-          <span className="text-[10px] text-zinc-400 block mt-0.5">BCA & QRIS settlement</span>
+          <span className="text-[10px] text-zinc-400 block mt-0.5">{unpaidOrders.length} SPK belum lunas</span>
         </div>
       </div>
 
+      {/* TAB 1: POS & TRANSAKSI */}
       {activeTab === 'pos' && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
@@ -273,6 +367,300 @@ export const KasirView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TAB 2: KAS KELUAR & PENGELUARAN TOKO (RECORDED BY CASHIER) */}
+      {activeTab === 'kas_keluar' && (
+        <div className="space-y-6">
+          {/* Information & Quick Presets Banner */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-rose-400" /> Buku Kas Keluar Harian • Front Desk
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Catat pengeluaran uang laci kasir untuk makan teknisi, pembelian bahan darurat, atau kebutuhan mendesak bengkel.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+                Total Kas Keluar: Rp {financials.totalExpenses.toLocaleString('id-ID')}
+              </span>
+            </div>
+
+            {/* Quick Presets for Cashier */}
+            <div className="pt-2 border-t border-zinc-800/80">
+              <span className="text-[11px] font-semibold text-zinc-400 block mb-2">⚡ Pintasan Cepat Kebutuhan Mendesak:</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyPreset('Makan Siang & Es Tim Teknisi', 'konsumsi_tim', 60000)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Utensils className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Makan Siang Tim (Rp 60.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('Beli Masking Tape & Busa Pad', 'alat_bengkel', 45000)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <span>Tape & Pad (Rp 45.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('Isi Galon Air Mineral & Kopi Tim', 'utilitas', 25000)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <span>Galon Air & Kopi (Rp 25.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('Bensin Motor Operasional Antar Jemput', 'operasional_lain', 30000)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <span>Bensin Operasional (Rp 30.000)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Filter Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            {categoryTotals.map(cat => (
+              <button
+                key={cat.key}
+                type="button"
+                onClick={() => setFilterCategory(filterCategory === cat.key ? 'all' : cat.key)}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  filterCategory === cat.key 
+                    ? 'bg-zinc-800 border-zinc-600 ring-1 ring-zinc-500' 
+                    : 'bg-zinc-900 border-zinc-800/80 hover:border-zinc-700'
+                }`}
+              >
+                <span className={`text-[10px] font-semibold block truncate ${cat.text}`}>{cat.label}</span>
+                <span className="text-sm sm:text-base font-bold font-mono text-zinc-100 block mt-1">
+                  Rp {cat.total.toLocaleString('id-ID')}
+                </span>
+                <span className="text-[10px] text-zinc-500 block">{cat.count} pengeluaran</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Left Column: Form Tambah Pengeluaran Kasir */}
+            <form onSubmit={handleAddExpense} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div className="pb-3 border-b border-zinc-800">
+                <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-rose-400" /> Catat Kas Keluar Kasir
+                </h3>
+                <p className="text-xs text-zinc-400">Pengeluaran otomatis mengurangi saldo uang fisik saat tutup kasir.</p>
+              </div>
+
+              {expenseSuccessMsg && (
+                <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs font-medium flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>{expenseSuccessMsg}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                  Keperluan / Judul Pengeluaran <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={expenseTitle}
+                  onChange={e => setExpenseTitle(e.target.value)}
+                  placeholder="Misal: Makan Siang 4 Teknisi & Minum"
+                  className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                    Kategori Pengeluaran
+                  </label>
+                  <select
+                    value={expenseCategory}
+                    onChange={e => setExpenseCategory(e.target.value as ExpenseCategory)}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-rose-500"
+                  >
+                    {Object.entries(EXPENSE_CATEGORIES).map(([key, item]) => (
+                      <option key={key} value={key}>{item.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                    Nominal Biaya (Rp) <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1000}
+                    step={5000}
+                    required
+                    value={expenseAmount || ''}
+                    onChange={e => setExpenseAmount(Number(e.target.value) || 0)}
+                    placeholder="0"
+                    className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-xs font-mono font-bold text-zinc-100 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                    Tanggal Transaksi
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={expenseDate}
+                    onChange={e => setExpenseDate(e.target.value)}
+                    className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-xs text-zinc-100 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                    No. Nota / Bon Warung (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={expenseReceipt}
+                    onChange={e => setExpenseReceipt(e.target.value)}
+                    placeholder="Nota No. 12"
+                    className="w-full h-10 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                  Catatan Keterangan Tambahan
+                </label>
+                <textarea
+                  rows={2}
+                  value={expenseNotes}
+                  onChange={e => setExpenseNotes(e.target.value)}
+                  placeholder="Keterangan warung/toko atau detail pembelian..."
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full h-11 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-rose-600/20"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Simpan Pengeluaran Kasir</span>
+              </button>
+            </form>
+
+            {/* Right Column: Riwayat Pengeluaran Kasir */}
+            <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-rose-400" /> Riwayat Kas Keluar
+                  </h3>
+                  <p className="text-xs text-zinc-400">Total Terdata: <strong className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</strong></p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative w-full sm:w-48">
+                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={expenseSearch}
+                      onChange={e => setExpenseSearch(e.target.value)}
+                      placeholder="Cari pengeluaran..."
+                      className="w-full h-8 bg-zinc-950 border border-zinc-700 rounded-lg pl-8 pr-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none"
+                    />
+                  </div>
+                  {filterCategory !== 'all' && (
+                    <button
+                      onClick={() => setFilterCategory('all')}
+                      className="px-2 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-lg hover:bg-zinc-700"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Tanggal</th>
+                      <th className="py-2.5 px-3">Keperluan / Keterangan</th>
+                      <th className="py-2.5 px-3">Kategori</th>
+                      <th className="py-2.5 px-3 text-right">Nominal</th>
+                      <th className="py-2.5 px-3 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {filteredExpenses.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-zinc-500 italic">
+                          Belum ada catatan kas keluar di kategori ini.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredExpenses.map(item => {
+                        const catMeta = EXPENSE_CATEGORIES[item.category];
+                        return (
+                          <tr key={item.id} className="hover:bg-zinc-950/40 text-zinc-300">
+                            <td className="py-3 px-3 font-mono text-zinc-400 whitespace-nowrap">
+                              {item.date}
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="font-semibold text-zinc-100">{item.title}</div>
+                              {item.receiptNumber && (
+                                <div className="text-[10px] text-zinc-400 font-mono">Nota: {item.receiptNumber}</div>
+                              )}
+                              {item.notes && (
+                                <div className="text-[11px] text-zinc-400 italic mt-0.5">{item.notes}</div>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${catMeta?.badge || 'bg-zinc-800'} ${catMeta?.text || 'text-zinc-300'}`}>
+                                {catMeta?.label || item.category}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
+                              Rp {item.amount.toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Hapus catatan kas keluar "${item.title}"?`)) {
+                                    deleteExpense(item.id);
+                                  }
+                                }}
+                                className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded transition-colors"
+                                title="Hapus Catatan Kas Keluar"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: MANAJEMEN PIUTANG */}
       {activeTab === 'piutang' && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
@@ -284,7 +672,7 @@ export const KasirView: React.FC = () => {
                 Kendaraan yang sudah/sedang dikerjakan tapi masih menyisakan tagihan belum lunas.
               </p>
             </div>
-            <span className="text-xs font-mono font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-3 py-1.5 rounded-lg">
+            <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-3 py-1.5 rounded-lg">
               Total Piutang: Rp {financials.totalUnpaidReceivables.toLocaleString('id-ID')}
             </span>
           </div>
@@ -365,6 +753,7 @@ export const KasirView: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 4: TUTUP KASIR HARIAN & REKONSILIASI UANG LACI */}
       {activeTab === 'tutup_kasir' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <form onSubmit={handleSaveClosing} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-5">
@@ -398,15 +787,28 @@ export const KasirView: React.FC = () => {
                 />
               </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
+              {/* Arus Kas Laci Reconciler breakdown */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5">
                 <div className="flex justify-between items-center text-xs text-zinc-400">
-                  <span>Total Uang Kas Tunai Menurut Sistem (Expected):</span>
-                  <span className="font-mono font-bold text-amber-400 text-sm">
+                  <span>Penerimaan Kas Tunai SPK (+):</span>
+                  <span className="font-mono font-bold text-zinc-200">
                     Rp {financials.cashPaymentsTotal.toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="text-[11px] text-zinc-500">
-                  Total dari seluruh SPK yang dibayar menggunakan metode <strong className="text-zinc-300">CASH / TUNAI</strong>.
+                <div className="flex justify-between items-center text-xs text-rose-400">
+                  <span>Kas Keluar Toko / Makan / Bahan (-):</span>
+                  <span className="font-mono font-bold">
+                    - Rp {financials.totalExpenses.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs pt-2 border-t border-zinc-800 text-zinc-300">
+                  <span className="font-semibold">Uang Kas Bersih di Laci Seharusnya (Expected):</span>
+                  <span className="font-mono font-bold text-amber-400 text-sm">
+                    Rp {expectedCashInDrawer.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="text-[10px] text-zinc-500">
+                  Rumus: Total Penerimaan Cash SPK dikurangi Kas Keluar yang dicatat kasir.
                 </div>
               </div>
 
@@ -431,22 +833,22 @@ export const KasirView: React.FC = () => {
 
               {actualDrawerCash > 0 && (
                 <div className={`p-4 rounded-xl border text-xs space-y-1.5 ${
-                  actualDrawerCash === financials.cashPaymentsTotal
+                  actualDrawerCash === expectedCashInDrawer
                     ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300'
-                    : actualDrawerCash < financials.cashPaymentsTotal
+                    : actualDrawerCash < expectedCashInDrawer
                     ? 'bg-rose-950/60 border-rose-700 text-rose-300'
                     : 'bg-blue-950/60 border-blue-700 text-blue-300'
                 }`}>
                   <div className="flex justify-between items-center font-bold">
                     <span>
-                      {actualDrawerCash === financials.cashPaymentsTotal
+                      {actualDrawerCash === expectedCashInDrawer
                         ? '✅ UANG FISIK PAS (Cocok Sempurna)'
-                        : actualDrawerCash < financials.cashPaymentsTotal
+                        : actualDrawerCash < expectedCashInDrawer
                         ? '⚠️ SELISIH KURANG (Uang Fisik Kurang dari Sistem)'
                         : 'ℹ️ SELISIH LEBIH (Uang Fisik Lebih Banyak)'}
                     </span>
                     <span className="font-mono text-sm">
-                      Rp {(actualDrawerCash - financials.cashPaymentsTotal).toLocaleString('id-ID')}
+                      Rp {(actualDrawerCash - expectedCashInDrawer).toLocaleString('id-ID')}
                     </span>
                   </div>
                 </div>
@@ -517,6 +919,7 @@ export const KasirView: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL PENERIMAAN PEMBAYARAN */}
       {payingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl p-5 sm:p-6 space-y-5 my-auto">
