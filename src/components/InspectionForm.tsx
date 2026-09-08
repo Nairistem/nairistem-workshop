@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 import { CarScratchMap } from './CarScratchMap';
 import type { ScratchPoint, ServiceItem, InitialPhoto, Order } from '../types/workshop';
@@ -6,6 +6,7 @@ import {
   Car, User, CheckCircle2, 
   Trash2, Sparkles, Camera, ArrowRight
 } from 'lucide-react';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface InspectionFormProps {
   onSuccess: (createdOrder: Order) => void;
@@ -47,25 +48,19 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({ onSuccess }) => 
     );
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, label: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [activeCameraSlot, setActiveCameraSlot] = useState<string | null>(null);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = reader.result as string;
-      setPhotos(prev => [
-        ...prev,
-        {
-          id: `ph-${Date.now()}`,
-          label,
-          url,
-          timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
-        }
-      ]);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+  const handleCameraCapture = (dataUrl: string, label: string) => {
+    setPhotos(prev => [
+      ...prev,
+      {
+        id: `ph-${Date.now()}`,
+        label,
+        url: dataUrl,
+        timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
+      }
+    ]);
+    setActiveCameraSlot(null);
   };
 
   const removePhoto = (id: string) => {
@@ -316,24 +311,27 @@ export const InspectionForm: React.FC<InspectionFormProps> = ({ onSuccess }) => 
             { label: 'Sisi Samping', id: 'btn-side' },
             { label: 'Detail Baret', id: 'btn-scratch' },
           ].map(slot => (
-            <label
+            <button
               key={slot.id}
-              className="h-14 sm:h-16 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-zinc-700 hover:border-cyan-500 bg-zinc-950/80 cursor-pointer transition-colors p-2 text-center group"
+              type="button"
+              onClick={() => setActiveCameraSlot(slot.label)}
+              className="h-14 sm:h-16 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-zinc-700 hover:border-cyan-500 bg-zinc-950/80 cursor-pointer transition-colors p-2 text-center group"
             >
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={e => handlePhotoUpload(e, slot.label)}
-              />
               <Camera className="w-4 h-4 text-zinc-400 group-hover:text-cyan-400" />
               <span className="text-[11px] font-medium text-zinc-300 group-hover:text-zinc-100 leading-none">
-                + {slot.label}
+                📸 {slot.label}
               </span>
-            </label>
+            </button>
           ))}
         </div>
+
+        {activeCameraSlot && (
+          <CameraCaptureModal
+            label={activeCameraSlot}
+            onCapture={handleCameraCapture}
+            onClose={() => setActiveCameraSlot(null)}
+          />
+        )}
 
         {photos.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">

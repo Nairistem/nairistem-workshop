@@ -5,9 +5,10 @@ import { EXPENSE_CATEGORIES } from '../../types/workshop';
 import { 
   CreditCard, DollarSign, QrCode, Building2, Printer, 
   Send, CheckCircle2, Search, Clock, Lock, Check,
-  Wallet, Plus, Trash2, Utensils
+  Wallet, Plus, Trash2, Utensils, Eye
 } from 'lucide-react';
 import { InvoiceModal } from '../InvoiceModal';
+import { OrderDetailModal } from '../OrderDetailModal';
 import { createWhatsAppLink } from '../../lib/whatsapp';
 
 export const KasirView: React.FC = () => {
@@ -25,6 +26,7 @@ export const KasirView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pos' | 'kas_keluar' | 'piutang' | 'tutup_kasir'>('pos');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
 
   // POS Payment Modal State
   const [payingOrder, setPayingOrder] = useState<Order | null>(null);
@@ -340,7 +342,15 @@ export const KasirView: React.FC = () => {
                           {isPaid ? 'LUNAS' : order.paymentStatus === 'partial' ? 'DP' : 'BELUM'}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-right space-x-1 whitespace-nowrap">
+                      <td className="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => setDetailOrder(order)}
+                          className="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 text-xs px-2.5 py-1.5 rounded-lg font-semibold inline-flex items-center gap-1 transition-all"
+                          title="Lihat Detail Pesanan SPK Lengkap"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Detail</span>
+                        </button>
                         {!isPaid && (
                           <button
                             onClick={() => openPayModal(order)}
@@ -729,6 +739,14 @@ export const KasirView: React.FC = () => {
 
                     <div className="flex items-center gap-2 pt-1">
                       <button
+                        onClick={() => setDetailOrder(order)}
+                        className="h-9 px-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors"
+                        title="Lihat Detail Pesanan Lengkap"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Detail</span>
+                      </button>
+                      <button
                         onClick={() => handleFollowUpWA(order)}
                         className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                         title="Kirim pesan penagihan sopan via WhatsApp"
@@ -1034,6 +1052,15 @@ export const KasirView: React.FC = () => {
         <InvoiceModal
           order={selectedInvoiceOrder}
           onClose={() => setSelectedInvoiceOrder(null)}
+        />
+      )}
+
+      {detailOrder && (
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
+          onOpenPayment={(ord) => openPayModal(ord)}
+          onOpenInvoice={(ord) => setSelectedInvoiceOrder(ord)}
         />
       )}
     </div>
