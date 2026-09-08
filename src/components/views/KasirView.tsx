@@ -1059,8 +1059,14 @@ export const KasirView: React.FC = () => {
         <OrderDetailModal
           order={detailOrder}
           onClose={() => setDetailOrder(null)}
-          onOpenPayment={(ord) => openPayModal(ord)}
-          onOpenInvoice={(ord) => setSelectedInvoiceOrder(ord)}
+          onOpenPayment={(ord) => {
+            setDetailOrder(null);
+            openPayModal(ord);
+          }}
+          onOpenInvoice={(ord) => {
+            setDetailOrder(null);
+            setSelectedInvoiceOrder(ord);
+          }}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import type { Order, PaymentStatus } from '../types/workshop';
 import { useWorkshop } from '../context/WorkshopContext';
 import { Printer, X, Check, FileText, Send } from 'lucide-react';
@@ -32,7 +32,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) =>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto">
         <div className="no-print p-4 sm:px-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-950">
           <div className="flex items-center gap-2">

@@ -217,8 +217,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             {onOpenInvoice && (
               <button
                 type="button"
-                onClick={() => onOpenInvoice(order)}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                onClick={() => {
+                  onClose();
+                  onOpenInvoice(order);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Cetak Nota / Invoice</span>
