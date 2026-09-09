@@ -1,7 +1,7 @@
-﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { 
   Order, OrderStatus, Technician, ServiceItem, UserRole, 
-  Expense, CashClosing, PaymentMethod 
+  Expense, CashClosing, PaymentMethod, AuthUser 
 } from '../types/workshop';
 import { 
   INITIAL_MOCK_ORDERS, DEFAULT_TECHNICIANS, SERVICE_CATALOG, 
@@ -10,9 +10,12 @@ import {
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface WorkshopContextType {
-  // Role & Navigation
+  // Auth & Roles
+  currentUser: AuthUser | null;
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
 
   // Orders
   orders: Order[];
@@ -64,24 +67,82 @@ const ORDERS_KEY = 'nairistem_workshop_orders_v2';
 const TECHS_KEY = 'nairistem_workshop_technicians_v2';
 const EXPENSES_KEY = 'nairistem_workshop_expenses_v2';
 const CLOSINGS_KEY = 'nairistem_workshop_cash_closings_v2';
-const ROLE_KEY = 'nairistem_workshop_role_v2';
+const AUTH_KEY = 'nairistem_workshop_auth_user_v2';
 
 const WorkshopContext = createContext<WorkshopContextType | undefined>(undefined);
 
 export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Current Active Role
+  // 1. Current Authenticated User (Kasir or Owner, null = Guest / Montir Lapangan)
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem(AUTH_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  // Active Role: if logged in as kasir/owner, match user.role; otherwise default is 'montir'
   const [currentRole, setCurrentRoleState] = useState<UserRole>(() => {
     try {
-      const saved = localStorage.getItem(ROLE_KEY);
-      if (saved === 'montir' || saved === 'kasir' || saved === 'owner') return saved;
+      const saved = localStorage.getItem(AUTH_KEY);
+      if (saved) {
+        const u: AuthUser = JSON.parse(saved);
+        if (u.role === 'kasir' || u.role === 'owner') return u.role;
+      }
     } catch {}
-    return 'montir'; // Default to workshop bay for mechanics or user choice
+    return 'montir';
   });
 
   const setCurrentRole = (role: UserRole) => {
+    // If not authenticated for that role, do not switch
+    if (role === 'kasir' && currentUser?.role !== 'kasir') return;
+    if (role === 'owner' && currentUser?.role !== 'owner') return;
     setCurrentRoleState(role);
+  };
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    if (cleanEmail === 'kasir@nairistem.com' && cleanPass === 'kasir123') {
+      const user: AuthUser = {
+        email: 'kasir@nairistem.com',
+        name: 'Kasir Meja Depan',
+        role: 'kasir'
+      };
+      setCurrentUser(user);
+      setCurrentRoleState('kasir');
+      try {
+        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+      } catch {}
+      return { success: true };
+    }
+
+    if (cleanEmail === 'owner@nairistem.com' && cleanPass === 'owner123') {
+      const user: AuthUser = {
+        email: 'owner@nairistem.com',
+        name: 'Owner & Manajer',
+        role: 'owner'
+      };
+      setCurrentUser(user);
+      setCurrentRoleState('owner');
+      try {
+        localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+      } catch {}
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: 'Email atau password salah. Silakan periksa kembali atau gunakan tombol quick-fill demo.'
+    };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setCurrentRoleState('montir');
     try {
-      localStorage.setItem(ROLE_KEY, role);
+      localStorage.removeItem(AUTH_KEY);
     } catch {}
   };
 
@@ -468,13 +529,19 @@ export const WorkshopProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem(TECHS_KEY, JSON.stringify(DEFAULT_TECHNICIANS));
     localStorage.setItem(EXPENSES_KEY, JSON.stringify(INITIAL_MOCK_EXPENSES));
     localStorage.removeItem(CLOSINGS_KEY);
+    localStorage.removeItem(AUTH_KEY);
+    setCurrentUser(null);
+    setCurrentRoleState('montir');
   };
 
   return (
     <WorkshopContext.Provider
       value={{
+        currentUser,
         currentRole,
         setCurrentRole,
+        login,
+        logout,
         orders,
         createOrder,
         updateOrderStatus,

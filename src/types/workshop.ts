@@ -1,4 +1,10 @@
-﻿export type UserRole = 'montir' | 'kasir' | 'owner';
+export type UserRole = 'montir' | 'kasir' | 'owner';
+
+export interface AuthUser {
+  email: string;
+  name: string;
+  role: 'kasir' | 'owner';
+}
 
 export type OrderStatus = 'queue' | 'detailing' | 'finishing' | 'ready' | 'completed';
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid';

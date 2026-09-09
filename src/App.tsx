@@ -5,10 +5,12 @@ import { MontirView } from './components/views/MontirView';
 import { KasirView } from './components/views/KasirView';
 import { OwnerView } from './components/views/OwnerView';
 import { PublicTracking } from './components/PublicTracking';
+import { LoginModal } from './components/LoginModal';
 
 function MainApp() {
   const [trackingPlate, setTrackingPlate] = useState<string | null>(null);
-  const { currentRole, orders } = useWorkshop();
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const { currentRole, currentUser, orders } = useWorkshop();
 
   // Handle URL path on initial load & popstate (e.g. /track/B1988NAI or /track/B-1988-NAI)
   useEffect(() => {
@@ -59,6 +61,7 @@ function MainApp() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <Navbar
         onOpenLiveTracking={() => openTrackingView(orders[0]?.plateNumber || 'B1988NAI')}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6">
@@ -75,12 +78,21 @@ function MainApp() {
         )}
       </main>
 
+      {/* Login Modal */}
+      {isLoginModalOpen && (
+        <LoginModal onClose={() => setIsLoginModalOpen(false)} />
+      )}
+
       {/* Footer Branding */}
       <footer className="border-t border-zinc-800/80 bg-zinc-950 py-4 text-center text-xs text-zinc-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>&copy; {new Date().getFullYear()} NAIRISTEM Workshop OS • Auto Detailing & Workshop Management</span>
           <span className="text-[11px] text-zinc-400">
-            Peran Aktif: <strong className="text-zinc-200 uppercase">{currentRole}</strong>
+            {currentUser ? (
+              <>Sesi Aktif: <strong className="text-zinc-200">{currentUser.name}</strong> ({currentUser.role.toUpperCase()})</>
+            ) : (
+              <>Akses: <strong className="text-blue-400">Montir Lapangan</strong> (Siap Kerja Tanpa Login)</>
+            )}
           </span>
         </div>
       </footer>
