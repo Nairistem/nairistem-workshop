@@ -9,9 +9,12 @@ import {
   TrendingUp, Wallet, Users, Award, 
   Plus, Trash2, Edit2, CheckCircle2, 
   Search, ExternalLink,
-  Percent
+  Percent, Calendar, RotateCcw
 } from 'lucide-react';
 import { createWhatsAppLink } from '../../lib/whatsapp';
+
+type FinancialPeriod = 'all' | 'today' | '7days' | '30days' | 'this_month' | 'last_month' | 'custom';
+type ExpenseDatePeriod = 'all' | 'today' | '7days' | '30days' | 'this_month' | 'last_month' | 'custom';
 
 export const OwnerView: React.FC = () => {
   const { 
@@ -28,6 +31,11 @@ export const OwnerView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'financials' | 'expenses' | 'staff' | 'performance'>('financials');
 
+  // --- Financial Dashboard Time Filter ---
+  const [financialPeriod, setFinancialPeriod] = useState<FinancialPeriod>('all');
+  const [financialStartDate, setFinancialStartDate] = useState('');
+  const [financialEndDate, setFinancialEndDate] = useState('');
+
   // --- Expenses Form & Filters ---
   const [expenseTitle, setExpenseTitle] = useState('');
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('sewa_tempat');
@@ -38,6 +46,11 @@ export const OwnerView: React.FC = () => {
   const [expenseSuccessMsg, setExpenseSuccessMsg] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [expenseSearch, setExpenseSearch] = useState('');
+
+  // --- Expenses Date Filter ---
+  const [expensePeriod, setExpensePeriod] = useState<ExpenseDatePeriod>('all');
+  const [expenseStartDate, setExpenseStartDate] = useState('');
+  const [expenseEndDate, setExpenseEndDate] = useState('');
 
   // --- Staff Management Form ---
   const [isStaffFormOpen, setIsStaffFormOpen] = useState(false);
@@ -56,6 +69,77 @@ export const OwnerView: React.FC = () => {
     'Kasir & Front Desk',
     'Workshop Manager',
   ];
+
+  // --- Date Range Helper Functions ---
+  const getLocalDateString = (d: Date = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isDateInPeriod = (
+    dateInput: string, 
+    period: string, 
+    customStart?: string, 
+    customEnd?: string
+  ): boolean => {
+    if (!dateInput) return false;
+    if (period === 'all') return true;
+
+    const itemDateStr = dateInput.includes('T') ? dateInput.split('T')[0] : dateInput.slice(0, 10);
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+
+    if (period === 'today') {
+      return itemDateStr === todayStr;
+    }
+
+    if (period === '7days') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 6);
+      const pastStr = getLocalDateString(past);
+      return itemDateStr >= pastStr && itemDateStr <= todayStr;
+    }
+
+    if (period === '30days') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 29);
+      const pastStr = getLocalDateString(past);
+      return itemDateStr >= pastStr && itemDateStr <= todayStr;
+    }
+
+    if (period === 'this_month') {
+      const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      return itemDateStr.startsWith(currentYearMonth);
+    }
+
+    if (period === 'last_month') {
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastYearMonth = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
+      return itemDateStr.startsWith(lastYearMonth);
+    }
+
+    if (period === 'custom') {
+      if (customStart && itemDateStr < customStart) return false;
+      if (customEnd && itemDateStr > customEnd) return false;
+      return true;
+    }
+
+    return true;
+  };
+
+  const getPeriodLabel = (period: string, start?: string, end?: string) => {
+    switch (period) {
+      case 'today': return 'Hari Ini';
+      case '7days': return '7 Hari Terakhir';
+      case '30days': return '30 Hari Terakhir';
+      case 'this_month': return 'Bulan Ini';
+      case 'last_month': return 'Bulan Lalu';
+      case 'custom': return start && end ? `${start} s/d ${end}` : 'Rentang Kustom';
+      default: return 'Semua Waktu (All-Time)';
+    }
+  };
 
   // Submit Expense (Strategic / Owner level)
   const handleAddExpense = async (e: React.FormEvent) => {
@@ -133,12 +217,27 @@ export const OwnerView: React.FC = () => {
     window.open(link, '_blank');
   };
 
-  // Calculate expenses category breakdown
+  // --- Filtered Expenses Calculations (with Date & Category) ---
+  const filteredExpenses = expenses.filter(e => {
+    const matchesCategory = filterCategory === 'all' || e.category === filterCategory;
+    const q = expenseSearch.toLowerCase();
+    const matchesSearch = e.title.toLowerCase().includes(q) || 
+      (e.notes && e.notes.toLowerCase().includes(q)) ||
+      (e.receiptNumber && e.receiptNumber.toLowerCase().includes(q));
+    const matchesDate = isDateInPeriod(e.date, expensePeriod, expenseStartDate, expenseEndDate);
+    return matchesCategory && matchesSearch && matchesDate;
+  });
+
+  const filteredTotalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  // Calculate expenses category breakdown respecting current date filter
   const categoryTotals = Object.keys(EXPENSE_CATEGORIES).map(catKey => {
-    const total = expenses
-      .filter(e => e.category === catKey)
-      .reduce((sum, e) => sum + e.amount, 0);
-    const count = expenses.filter(e => e.category === catKey).length;
+    const matching = expenses.filter(e => 
+      e.category === catKey && 
+      isDateInPeriod(e.date, expensePeriod, expenseStartDate, expenseEndDate)
+    );
+    const total = matching.reduce((sum, e) => sum + e.amount, 0);
+    const count = matching.length;
     return {
       key: catKey as ExpenseCategory,
       ...EXPENSE_CATEGORIES[catKey as ExpenseCategory],
@@ -147,26 +246,46 @@ export const OwnerView: React.FC = () => {
     };
   });
 
-  // Filtered expenses
-  const filteredExpenses = expenses.filter(e => {
-    const matchesCategory = filterCategory === 'all' || e.category === filterCategory;
-    const q = expenseSearch.toLowerCase();
-    const matchesSearch = e.title.toLowerCase().includes(q) || (e.notes && e.notes.toLowerCase().includes(q));
-    return matchesCategory && matchesSearch;
-  });
+  // --- Calculations for Financial View (Dynamically Filtered by Time Period) ---
+  const periodOrders = orders.filter(o => 
+    isDateInPeriod(o.createdAt, financialPeriod, financialStartDate, financialEndDate)
+  );
 
-  // Calculations for Financial View
-  const profitMargin = financials.totalGrossRevenue > 0 
-    ? Math.round((financials.realNetProfit / financials.totalGrossRevenue) * 100) 
+  const periodExpenses = expenses.filter(e => 
+    isDateInPeriod(e.date, financialPeriod, financialStartDate, financialEndDate)
+  );
+
+  const periodGrossRevenue = periodOrders.reduce((sum, o) => sum + (o.finalTotal || 0), 0);
+  const periodPaidRevenue = periodOrders.reduce((sum, o) => sum + (o.amountPaid || 0), 0);
+  const periodUnpaidReceivables = periodOrders.reduce((sum, o) => sum + (o.remainingBalance || 0), 0);
+  const periodCommissionPayable = periodOrders.reduce((sum, o) => sum + (o.technicianCommissionAmount || 0), 0);
+  const periodTotalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const periodRealNetProfit = periodGrossRevenue - periodCommissionPayable - periodTotalExpenses;
+
+  const profitMargin = periodGrossRevenue > 0 
+    ? Math.round((periodRealNetProfit / periodGrossRevenue) * 100) 
     : 0;
 
-  const commissionPctOfGross = financials.totalGrossRevenue > 0
-    ? Math.round((financials.totalCommissionPayable / financials.totalGrossRevenue) * 100)
+  const commissionPctOfGross = periodGrossRevenue > 0
+    ? Math.round((periodCommissionPayable / periodGrossRevenue) * 100)
     : 0;
 
-  const expensePctOfGross = financials.totalGrossRevenue > 0
-    ? Math.round((financials.totalExpenses / financials.totalGrossRevenue) * 100)
+  const expensePctOfGross = periodGrossRevenue > 0
+    ? Math.round((periodTotalExpenses / periodGrossRevenue) * 100)
     : 0;
+
+  // Breakdown of payment channels for the selected period
+  const periodCashPayments = periodOrders
+    .filter(o => o.paymentMethod === 'cash')
+    .reduce((sum, o) => sum + (o.amountPaid || 0), 0);
+
+  const periodTransferPayments = periodOrders
+    .filter(o => o.paymentMethod === 'transfer')
+    .reduce((sum, o) => sum + (o.amountPaid || 0), 0);
+
+  const periodQrisPayments = periodOrders
+    .filter(o => o.paymentMethod === 'qris')
+    .reduce((sum, o) => sum + (o.amountPaid || 0), 0);
 
   // Technician Leaderboard data
   const technicianPerformance = technicians.map(tech => {
@@ -249,15 +368,117 @@ export const OwnerView: React.FC = () => {
       {/* TAB 1: FINANCIALS & REAL NET PROFIT */}
       {activeTab === 'financials' && (
         <div className="space-y-6">
+          {/* Period Filter Bar for Executive Dashboard */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-white">
+                <div className="w-9 h-9 rounded-xl bg-purple-950 border border-purple-800/60 flex items-center justify-center text-purple-400 shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold block leading-tight">
+                      Filter Periode Waktu Dashboard
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-950/80 text-purple-300 border border-purple-800/70">
+                      {getPeriodLabel(financialPeriod, financialStartDate, financialEndDate)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Kalkulasi laba bersih riil, omzet SPK, dan komisi disaring berdasarkan rentang waktu terpilih.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 text-xs">
+                {[
+                  { id: 'all', label: 'Semua Waktu' },
+                  { id: 'today', label: 'Hari Ini' },
+                  { id: '7days', label: '7 Hari' },
+                  { id: '30days', label: '30 Hari' },
+                  { id: 'this_month', label: 'Bulan Ini' },
+                  { id: 'last_month', label: 'Bulan Lalu' },
+                  { id: 'custom', label: 'Kustom 📅' },
+                ].map(btn => (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => setFinancialPeriod(btn.id as FinancialPeriod)}
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                      financialPeriod === btn.id
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                    }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Date Range Row (Visible when 'custom' is selected) */}
+            {financialPeriod === 'custom' && (
+              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-zinc-800/80 text-xs animate-in fade-in duration-200">
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 font-medium">Dari Tanggal:</span>
+                  <input
+                    type="date"
+                    value={financialStartDate}
+                    onChange={e => setFinancialStartDate(e.target.value)}
+                    className="h-8 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 font-medium">Sampai Tanggal:</span>
+                  <input
+                    type="date"
+                    value={financialEndDate}
+                    onChange={e => setFinancialEndDate(e.target.value)}
+                    className="h-8 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                {(financialStartDate || financialEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => { setFinancialStartDate(''); setFinancialEndDate(''); }}
+                    className="px-2.5 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Reset Tanggal
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-zinc-400 pt-1 gap-1">
+              <span>
+                📊 Data Periode Terpilih: <strong className="text-white">{periodOrders.length} Unit SPK</strong> dan <strong className="text-white">{periodExpenses.length} Nota Kas Keluar</strong>
+              </span>
+              {financialPeriod !== 'all' && (
+                <button
+                  onClick={() => {
+                    setFinancialPeriod('all');
+                    setFinancialStartDate('');
+                    setFinancialEndDate('');
+                  }}
+                  className="text-purple-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Kembalikan ke Semua Waktu</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Real Net Profit Formula Banner */}
           <div className="bg-gradient-to-r from-zinc-900 via-purple-950/30 to-zinc-900 border border-purple-800/40 rounded-2xl p-4 sm:p-5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-purple-400 block mb-1">
-                  Formula Perhitungan Laba Bersih Hak Pemilik:
+                  Formula Perhitungan Laba Bersih Hak Pemilik ({getPeriodLabel(financialPeriod, financialStartDate, financialEndDate)}):
                 </span>
                 <p className="text-xs sm:text-sm text-zinc-300">
-                  <span className="text-zinc-100 font-bold">Laba Bersih Riil</span> = Total Omzet SPK (<span className="text-blue-400 font-mono">Rp {financials.totalGrossRevenue.toLocaleString('id-ID')}</span>) − Komisi Montir (<span className="text-cyan-400 font-mono">Rp {financials.totalCommissionPayable.toLocaleString('id-ID')}</span>) − Kas Keluar Toko (<span className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</span>)
+                  <span className="text-zinc-100 font-bold">Laba Bersih Riil</span> = Total Omzet SPK (<span className="text-blue-400 font-mono">Rp {periodGrossRevenue.toLocaleString('id-ID')}</span>) − Komisi Montir (<span className="text-cyan-400 font-mono">Rp {periodCommissionPayable.toLocaleString('id-ID')}</span>) − Kas Keluar Toko (<span className="text-rose-400 font-mono">Rp {periodTotalExpenses.toLocaleString('id-ID')}</span>)
                 </p>
               </div>
 
@@ -265,7 +486,7 @@ export const OwnerView: React.FC = () => {
                 <div>
                   <span className="text-[10px] text-zinc-400 uppercase font-bold block">Hasil Laba Bersih:</span>
                   <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">
-                    Rp {financials.realNetProfit.toLocaleString('id-ID')}
+                    Rp {periodRealNetProfit.toLocaleString('id-ID')}
                   </span>
                 </div>
                 <div className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-300 text-xs font-bold font-mono">
@@ -280,15 +501,15 @@ export const OwnerView: React.FC = () => {
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
               <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Total Omzet SPK</span>
               <span className="text-lg sm:text-2xl font-bold font-mono text-blue-400">
-                Rp {financials.totalGrossRevenue.toLocaleString('id-ID')}
+                Rp {periodGrossRevenue.toLocaleString('id-ID')}
               </span>
-              <span className="text-[10px] text-zinc-400 block mt-0.5">Dari {orders.length} transaksi SPK</span>
+              <span className="text-[10px] text-zinc-400 block mt-0.5">Dari {periodOrders.length} transaksi SPK</span>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
               <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Total Komisi Montir</span>
               <span className="text-lg sm:text-2xl font-bold font-mono text-cyan-400">
-                Rp {financials.totalCommissionPayable.toLocaleString('id-ID')}
+                Rp {periodCommissionPayable.toLocaleString('id-ID')}
               </span>
               <span className="text-[10px] text-zinc-400 block mt-0.5">{commissionPctOfGross}% dari total omzet</span>
             </div>
@@ -296,15 +517,15 @@ export const OwnerView: React.FC = () => {
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
               <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Pengeluaran Toko</span>
               <span className="text-lg sm:text-2xl font-bold font-mono text-rose-400">
-                Rp {financials.totalExpenses.toLocaleString('id-ID')}
+                Rp {periodTotalExpenses.toLocaleString('id-ID')}
               </span>
-              <span className="text-[10px] text-zinc-400 block mt-0.5">Dicatat oleh Kasir & Owner</span>
+              <span className="text-[10px] text-zinc-400 block mt-0.5">Dari {periodExpenses.length} transaksi beban</span>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
               <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Uang Kas Masuk</span>
               <span className="text-lg sm:text-2xl font-bold font-mono text-emerald-400">
-                Rp {financials.totalPaidRevenue.toLocaleString('id-ID')}
+                Rp {periodPaidRevenue.toLocaleString('id-ID')}
               </span>
               <span className="text-[10px] text-zinc-400 block mt-0.5">Sudah masuk rekening/laci</span>
             </div>
@@ -312,7 +533,7 @@ export const OwnerView: React.FC = () => {
             <div className="col-span-2 lg:col-span-1 bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
               <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Piutang Gantung</span>
               <span className="text-lg sm:text-2xl font-bold font-mono text-amber-400">
-                Rp {financials.totalUnpaidReceivables.toLocaleString('id-ID')}
+                Rp {periodUnpaidReceivables.toLocaleString('id-ID')}
               </span>
               <span className="text-[10px] text-amber-400/80 block mt-0.5">Belum ditransfer customer</span>
             </div>
@@ -326,7 +547,7 @@ export const OwnerView: React.FC = () => {
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Percent className="w-4 h-4 text-purple-400" /> Distribusi Alokasi Omzet SPK
                 </h3>
-                <p className="text-xs text-zinc-400">Proporsi uang masuk terhadap biaya operasional toko, gaji/komisi, dan laba bersih.</p>
+                <p className="text-xs text-zinc-400">Proporsi uang masuk terhadap biaya operasional toko, gaji/komisi, dan laba bersih ({getPeriodLabel(financialPeriod, financialStartDate, financialEndDate)}).</p>
               </div>
 
               {/* Stacked Progress Bar */}
@@ -355,7 +576,7 @@ export const OwnerView: React.FC = () => {
                     <span>Laba Bersih</span>
                   </div>
                   <div className="font-mono font-bold text-white">{profitMargin}%</div>
-                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Rp {financials.realNetProfit.toLocaleString('id-ID')}</div>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Rp {periodRealNetProfit.toLocaleString('id-ID')}</div>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-900/60">
@@ -364,7 +585,7 @@ export const OwnerView: React.FC = () => {
                     <span>Komisi Montir</span>
                   </div>
                   <div className="font-mono font-bold text-white">{commissionPctOfGross}%</div>
-                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Rp {financials.totalCommissionPayable.toLocaleString('id-ID')}</div>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Rp {periodCommissionPayable.toLocaleString('id-ID')}</div>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-900/60">
@@ -373,7 +594,7 @@ export const OwnerView: React.FC = () => {
                     <span>Kas Keluar Toko</span>
                   </div>
                   <div className="font-mono font-bold text-white">{expensePctOfGross}%</div>
-                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Rp {financials.totalExpenses.toLocaleString('id-ID')}</div>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Rp {periodTotalExpenses.toLocaleString('id-ID')}</div>
                 </div>
               </div>
             </div>
@@ -384,7 +605,7 @@ export const OwnerView: React.FC = () => {
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-emerald-400" /> Rekapitulasi Kas Masuk Berdasarkan Saluran
                 </h3>
-                <p className="text-xs text-zinc-400">Arus uang riil yang sudah tersimpan di laci tunai maupun rekening bank.</p>
+                <p className="text-xs text-zinc-400">Arus uang riil yang sudah tersimpan di laci tunai maupun rekening bank ({getPeriodLabel(financialPeriod, financialStartDate, financialEndDate)}).</p>
               </div>
 
               <div className="space-y-2.5 text-xs">
@@ -399,7 +620,7 @@ export const OwnerView: React.FC = () => {
                     </div>
                   </div>
                   <span className="font-mono font-bold text-amber-400 text-sm sm:text-base">
-                    Rp {financials.cashPaymentsTotal.toLocaleString('id-ID')}
+                    Rp {periodCashPayments.toLocaleString('id-ID')}
                   </span>
                 </div>
 
@@ -414,7 +635,7 @@ export const OwnerView: React.FC = () => {
                     </div>
                   </div>
                   <span className="font-mono font-bold text-blue-400 text-sm sm:text-base">
-                    Rp {financials.transferPaymentsTotal.toLocaleString('id-ID')}
+                    Rp {periodTransferPayments.toLocaleString('id-ID')}
                   </span>
                 </div>
 
@@ -429,7 +650,7 @@ export const OwnerView: React.FC = () => {
                     </div>
                   </div>
                   <span className="font-mono font-bold text-cyan-400 text-sm sm:text-base">
-                    Rp {financials.qrisPaymentsTotal.toLocaleString('id-ID')}
+                    Rp {periodQrisPayments.toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
@@ -441,6 +662,108 @@ export const OwnerView: React.FC = () => {
       {/* TAB 2: AUDIT & REKAP LAPORAN KAS KELUAR TOKO */}
       {activeTab === 'expenses' && (
         <div className="space-y-6">
+          {/* Date Filter Bar for Expenses */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-white">
+                <div className="w-9 h-9 rounded-xl bg-rose-950 border border-rose-800/60 flex items-center justify-center text-rose-400 shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold block leading-tight">
+                      Filter Tanggal Pengeluaran Harian
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/80 text-rose-300 border border-rose-800/70">
+                      {getPeriodLabel(expensePeriod, expenseStartDate, expenseEndDate)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Filter riwayat pengeluaran kas toko dan ringkasan beban per pos berdasarkan tanggal transaksi.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Presets for Expenses */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 text-xs">
+                {[
+                  { id: 'all', label: 'Semua Tanggal' },
+                  { id: 'today', label: 'Hari Ini' },
+                  { id: '7days', label: '7 Hari' },
+                  { id: '30days', label: '30 Hari' },
+                  { id: 'this_month', label: 'Bulan Ini' },
+                  { id: 'last_month', label: 'Bulan Lalu' },
+                  { id: 'custom', label: 'Pilih Tanggal 📅' },
+                ].map(btn => (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => setExpensePeriod(btn.id as ExpenseDatePeriod)}
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                      expensePeriod === btn.id
+                        ? 'bg-rose-600 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                    }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Range for Expenses */}
+            {expensePeriod === 'custom' && (
+              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-zinc-800/80 text-xs animate-in fade-in duration-200">
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 font-medium">Dari Tanggal:</span>
+                  <input
+                    type="date"
+                    value={expenseStartDate}
+                    onChange={e => setExpenseStartDate(e.target.value)}
+                    className="h-8 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 font-medium">Sampai Tanggal:</span>
+                  <input
+                    type="date"
+                    value={expenseEndDate}
+                    onChange={e => setExpenseEndDate(e.target.value)}
+                    className="h-8 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 text-xs text-zinc-100 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+                {(expenseStartDate || expenseEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => { setExpenseStartDate(''); setExpenseEndDate(''); }}
+                    className="px-2.5 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Reset Tanggal
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-zinc-400 pt-1 gap-1">
+              <span>
+                Filter Tanggal: <strong className="text-rose-300">{getPeriodLabel(expensePeriod, expenseStartDate, expenseEndDate)}</strong> • Menampilkan <strong className="text-white">{filteredExpenses.length} Nota</strong> • Total Beban: <strong className="text-rose-400 font-mono">Rp {filteredTotalExpenses.toLocaleString('id-ID')}</strong>
+              </span>
+              {expensePeriod !== 'all' && (
+                <button
+                  onClick={() => {
+                    setExpensePeriod('all');
+                    setExpenseStartDate('');
+                    setExpenseEndDate('');
+                  }}
+                  className="text-rose-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Kembalikan ke Semua Tanggal</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Audit Information Banner */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -452,9 +775,16 @@ export const OwnerView: React.FC = () => {
                   Rekapitulasi pengeluaran kas toko yang dicatat kasir (makan teknisi, belanja mendesak) serta pengeluaran sewa & operasional owner.
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-3 py-1.5 rounded-lg self-start sm:self-auto">
-                Total Beban Toko: Rp {financials.totalExpenses.toLocaleString('id-ID')}
-              </span>
+              <div className="flex flex-col items-start sm:items-end gap-1">
+                <span className="text-xs font-mono font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+                  Total Beban: Rp {filteredTotalExpenses.toLocaleString('id-ID')}
+                </span>
+                {expensePeriod !== 'all' && (
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    All-Time: Rp {financials.totalExpenses.toLocaleString('id-ID')}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -601,7 +931,9 @@ export const OwnerView: React.FC = () => {
                   <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
                     <Wallet className="w-4 h-4 text-rose-400" /> Riwayat Audit Seluruh Kas Keluar
                   </h3>
-                  <p className="text-xs text-zinc-400">Total Terdata: <strong className="text-rose-400 font-mono">Rp {financials.totalExpenses.toLocaleString('id-ID')}</strong></p>
+                  <p className="text-xs text-zinc-400">
+                    Menampilkan: <strong className="text-rose-400 font-mono">Rp {filteredTotalExpenses.toLocaleString('id-ID')}</strong> ({filteredExpenses.length} dari {expenses.length} nota terdata)
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -615,12 +947,19 @@ export const OwnerView: React.FC = () => {
                       className="w-full h-8 bg-zinc-950 border border-zinc-700 rounded-lg pl-8 pr-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none"
                     />
                   </div>
-                  {filterCategory !== 'all' && (
+                  {(filterCategory !== 'all' || expensePeriod !== 'all' || expenseSearch) && (
                     <button
-                      onClick={() => setFilterCategory('all')}
-                      className="px-2 py-1 bg-zinc-800 text-zinc-300 text-xs rounded-lg hover:bg-zinc-700"
+                      onClick={() => {
+                        setFilterCategory('all');
+                        setExpensePeriod('all');
+                        setExpenseStartDate('');
+                        setExpenseEndDate('');
+                        setExpenseSearch('');
+                      }}
+                      className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                      title="Reset Semua Filter"
                     >
-                      Reset
+                      Reset Filter
                     </button>
                   )}
                 </div>
